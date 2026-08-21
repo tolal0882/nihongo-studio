@@ -98,7 +98,7 @@ export default async function LessonDetailPage({ params }: { params: Promise<{ i
       {/* Complete button */}
       <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
         <Link href="/lessons" className="btn btn-secondary">Back to lessons</Link>
-        <button className="btn btn-primary" onClick={() => {}}>Mark complete +{lesson.xpReward} XP</button>
+        <Link href="/lessons" className="btn btn-primary">Complete lesson +{lesson.xpReward} XP</Link>
       </div>
     </div>
   )

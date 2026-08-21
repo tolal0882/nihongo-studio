@@ -16,6 +16,7 @@
     "db:import:kanji": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/import-kanji.ts",
     "db:import:vocabulary": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/import-vocabulary.ts",
     "db:import:examples": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/import-examples.ts",
+    "db:generate-lessons": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/generate-lesson-content.ts",
     "db:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
     "test": "vitest run",

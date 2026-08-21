@@ -98,7 +98,9 @@ export default async function LessonDetailPage({ params }: { params: Promise<{ i
       {/* Complete button */}
       <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', paddingTop: '1rem', borderTop: '1px solid var(--color-border)' }}>
         <Link href="/lessons" className="btn btn-secondary">Back to lessons</Link>
-        <Link href="/lessons" className="btn btn-primary">Complete lesson +{lesson.xpReward} XP</Link>
+        <form action={`/api/lessons/${lesson.id}/complete`} method="POST">
+          <button type="submit" className="btn btn-primary">Complete lesson +{lesson.xpReward} XP</button>
+        </form>
       </div>
     </div>
   )

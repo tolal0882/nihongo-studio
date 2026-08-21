@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db/prisma'
 import { z } from 'zod'
 
 const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-const MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.6-flash'
 const MAX_TOOL_ITERATIONS = 5
 
 const tutorSchema = z.object({

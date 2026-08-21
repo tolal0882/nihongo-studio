@@ -4,7 +4,7 @@ import { GoogleGenAI } from '@google/genai'
 import { z } from 'zod'
 
 const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-const MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+const MODEL = process.env.GEMINI_MODEL ?? 'gemini-3.6-flash'
 
 const analyzeSchema = z.object({
   sentence: z.string().min(1).max(500),

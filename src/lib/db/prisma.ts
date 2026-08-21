@@ -4,6 +4,7 @@ import { Pool } from 'pg'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
+  pool: Pool | undefined
 }
 
 function createPrismaClient(): PrismaClient {
@@ -19,8 +20,8 @@ function createPrismaClient(): PrismaClient {
     })
   }
 
-  // Strip sslmode from the URL query string so pg-connection-string does not enforce
-  // strict TLS certificate verification on Supabase self-signed certificates.
+  // Strip sslmode from the URL query string so pg-connection-string doesn't enforce
+  // strict TLS verification which rejects Supabase pooler self-signed root certs.
   const cleanedConnectionString = rawConnectionString
     .replace(/[?&]sslmode=[^&]*/g, '')
     .replace(/\?&/, '?')
@@ -32,10 +33,22 @@ function createPrismaClient(): PrismaClient {
     rawConnectionString.includes('neon.tech') ||
     rawConnectionString.includes('sslmode=')
 
-  const pool = new Pool({
-    connectionString: cleanedConnectionString,
-    ssl: isRemote ? { rejectUnauthorized: false } : undefined,
-  })
+  // Optimize pg.Pool for Serverless:
+  // - max: 2 connections per lambda instance to prevent pool exhaustion on Supabase
+  // - idleTimeoutMillis: 2000 to quickly return connections to the pool
+  const pool =
+    globalForPrisma.pool ??
+    new Pool({
+      connectionString: cleanedConnectionString,
+      ssl: isRemote ? { rejectUnauthorized: false } : undefined,
+      max: process.env.NODE_ENV === 'production' ? 2 : 5,
+      idleTimeoutMillis: 2000,
+      connectionTimeoutMillis: 5000,
+    })
+
+  if (process.env.NODE_ENV !== 'production') {
+    globalForPrisma.pool = pool
+  }
 
   const adapter = new PrismaPg(pool)
   return new PrismaClient({

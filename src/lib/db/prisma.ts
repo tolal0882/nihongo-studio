@@ -7,8 +7,8 @@ const globalForPrisma = globalThis as unknown as {
 }
 
 function createPrismaClient(): PrismaClient {
-  const connectionString = process.env.DATABASE_URL
-  if (!connectionString) {
+  const rawConnectionString = process.env.DATABASE_URL
+  if (!rawConnectionString) {
     return new Proxy({} as PrismaClient, {
       get(_, prop) {
         if (prop === 'then') return undefined
@@ -19,11 +19,22 @@ function createPrismaClient(): PrismaClient {
     })
   }
 
+  // Strip sslmode from the URL query string so pg-connection-string does not enforce
+  // strict TLS certificate verification on Supabase self-signed certificates.
+  const cleanedConnectionString = rawConnectionString
+    .replace(/[?&]sslmode=[^&]*/g, '')
+    .replace(/\?&/, '?')
+    .replace(/\?$/, '')
+
+  const isRemote =
+    rawConnectionString.includes('supabase.co') ||
+    rawConnectionString.includes('pooler.supabase.com') ||
+    rawConnectionString.includes('neon.tech') ||
+    rawConnectionString.includes('sslmode=')
+
   const pool = new Pool({
-    connectionString,
-    ssl: connectionString.includes('supabase.co') || connectionString.includes('sslmode=')
-      ? { rejectUnauthorized: false }
-      : undefined,
+    connectionString: cleanedConnectionString,
+    ssl: isRemote ? { rejectUnauthorized: false } : undefined,
   })
 
   const adapter = new PrismaPg(pool)

@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ user }, { status: 201 })
   } catch (error) {
     console.error('Sign up error:', error)
-    return NextResponse.json({ error: 'Registration failed' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Registration failed'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

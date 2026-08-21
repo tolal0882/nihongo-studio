@@ -13,6 +13,9 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' prisma/seed.ts",
+    "db:import:kanji": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/import-kanji.ts",
+    "db:import:vocabulary": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/import-vocabulary.ts",
+    "db:import:examples": "ts-node --compiler-options '{\"module\":\"CommonJS\"}' scripts/import-examples.ts",
     "db:reset": "prisma migrate reset",
     "db:studio": "prisma studio",
     "test": "vitest run",
@@ -48,6 +51,7 @@
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "csv-parse": "^7.0.2",
     "framer-motion": "^13.1.1",
     "lucide-react": "^1.33.0",
     "next": "16.3.1",
@@ -56,6 +60,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "tailwind-merge": "^3.6.0",
+    "wanakana": "^5.3.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

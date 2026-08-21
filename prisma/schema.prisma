@@ -1,0 +1,756 @@
+// Nihongo Studio — Prisma Schema
+// Full production schema for Japanese learning platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Auth ───────────────────────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String?
+  image         String?
+  password      String?   // hashed, null for OAuth users
+  role          Role      @default(LEARNER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  profile       Profile?
+
+  userVocabulary  UserVocabulary[]
+  userKanji       UserKanji[]
+  userGrammar     UserGrammar[]
+  lessonProgress  LessonProgress[]
+  quizAttempts    QuizAttempt[]
+  studySessions   StudySession[]
+  searchHistory   SearchHistory[]
+  recommendations Recommendation[]
+  aiConversations AIConversation[]
+  reviewSchedules ReviewSchedule[]
+
+  @@map("users")
+}
+
+enum Role {
+  LEARNER
+  ADMIN
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── User Profile ───────────────────────────────────────────────────────────
+
+model Profile {
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  currentLevel       JLPTLevel @default(ZERO)
+  targetLevel        JLPTLevel @default(N5)
+  studyGoal          String?
+  dailyGoalMinutes   Int       @default(15)
+  currentStreak      Int       @default(0)
+  longestStreak      Int       @default(0)
+  lastStudiedAt      DateTime?
+  totalStudyMinutes  Int       @default(0)
+  xp                 Int       @default(0)
+  vocabularyMastery  Float     @default(0)
+  kanjiMastery       Float     @default(0)
+  grammarMastery     Float     @default(0)
+  readingLevel       Float     @default(0)
+  listeningLevel     Float     @default(0)
+  writingLevel       Float     @default(0)
+  weakTopics         String[]  @default([])
+  onboardingComplete Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("profiles")
+}
+
+enum JLPTLevel {
+  ZERO
+  N5
+  N4
+  N3
+  N2
+  N1
+  ADVANCED
+}
+
+// ─── Curriculum ─────────────────────────────────────────────────────────────
+
+model Course {
+  id          String    @id @default(cuid())
+  title       String
+  titleJa     String?
+  description String?
+  level       JLPTLevel
+  order       Int
+  imageUrl    String?
+  isPublished Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  lessons Lesson[]
+
+  @@index([level])
+  @@map("courses")
+}
+
+model Lesson {
+  id          String    @id @default(cuid())
+  courseId    String
+  title       String
+  titleJa     String?
+  description String?
+  level       JLPTLevel
+  order       Int
+  isPublished Boolean   @default(false)
+  xpReward    Int       @default(10)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  course   Course          @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  sections LessonSection[]
+  progress LessonProgress[]
+
+  @@index([courseId])
+  @@index([level])
+  @@map("lessons")
+}
+
+model LessonSection {
+  id        String      @id @default(cuid())
+  lessonId  String
+  type      SectionType
+  order     Int
+  title     String?
+  content   Json        // flexible JSON for different section types
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@index([lessonId])
+  @@map("lesson_sections")
+}
+
+enum SectionType {
+  EXPLANATION
+  VOCABULARY
+  GRAMMAR
+  KANJI
+  LISTENING
+  READING
+  SPEAKING
+  WRITING
+  QUIZ
+  REVIEW
+}
+
+model LessonProgress {
+  id          String   @id @default(cuid())
+  userId      String
+  lessonId    String
+  completed   Boolean  @default(false)
+  score       Float?
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  timeSpentMs Int      @default(0)
+  updatedAt   DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, lessonId])
+  @@index([userId])
+  @@map("lesson_progress")
+}
+
+// ─── Vocabulary ─────────────────────────────────────────────────────────────
+
+model Vocabulary {
+  id              String    @id @default(cuid())
+  kanji           String?   // 食べる (may be null for kana-only words)
+  primaryReading  String    // たべる (hiragana)
+  katakana        String?   // テレビ (for katakana words)
+  romaji          String    // taberu
+  jlptLevel       JLPTLevel
+  partOfSpeech    String[]  // ["verb", "ichidan"]
+  frequency       Int       @default(9999)  // lower = more common
+  pitchAccent     String?
+  isCommon        Boolean   @default(false)
+  tags            String[]  @default([])
+  audioUrl        String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  meanings     VocabularyMeaning[]
+  examples     VocabularyExample[]
+  userProgress UserVocabulary[]
+  audioSources AudioSource[]
+
+  @@index([kanji])
+  @@index([primaryReading])
+  @@index([romaji])
+  @@index([jlptLevel])
+  @@index([frequency])
+  @@map("vocabulary")
+}
+
+model VocabularyMeaning {
+  id           String @id @default(cuid())
+  vocabularyId String
+  meaning      String // "to eat"
+  language     String @default("en")
+  order        Int    @default(0)
+
+  vocabulary Vocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Cascade)
+
+  @@index([vocabularyId])
+  @@index([meaning])
+  @@map("vocabulary_meanings")
+}
+
+model VocabularyExample {
+  id           String  @id @default(cuid())
+  vocabularyId String
+  japanese     String
+  romaji       String?
+  english      String
+  audioUrl     String?
+  order        Int     @default(0)
+
+  vocabulary Vocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Cascade)
+
+  @@index([vocabularyId])
+  @@map("vocabulary_examples")
+}
+
+// ─── Kanji ───────────────────────────────────────────────────────────────────
+
+model Kanji {
+  id           String    @id @default(cuid())
+  character    String    @unique
+  meanings     String[]
+  onyomi       String[]  // On-yomi readings
+  kunyomi      String[]  // Kun-yomi readings
+  strokeCount  Int
+  jlptLevel    JLPTLevel
+  frequency    Int       @default(9999)
+  grade        Int?      // Japanese school grade (1-6, S for secondary)
+  unicode      String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  readings     KanjiReading[]
+  examples     KanjiExample[]
+  strokes      KanjiStroke[]
+  userProgress UserKanji[]
+
+  @@index([character])
+  @@index([jlptLevel])
+  @@index([frequency])
+  @@map("kanji")
+}
+
+model KanjiReading {
+  id       String      @id @default(cuid())
+  kanjiId  String
+  type     ReadingType // ON or KUN
+  reading  String
+  romaji   String?
+
+  kanji Kanji @relation(fields: [kanjiId], references: [id], onDelete: Cascade)
+
+  @@index([kanjiId])
+  @@map("kanji_readings")
+}
+
+enum ReadingType {
+  ON
+  KUN
+  NANORI
+}
+
+model KanjiExample {
+  id       String @id @default(cuid())
+  kanjiId  String
+  word     String
+  reading  String
+  meaning  String
+  order    Int    @default(0)
+
+  kanji Kanji @relation(fields: [kanjiId], references: [id], onDelete: Cascade)
+
+  @@index([kanjiId])
+  @@map("kanji_examples")
+}
+
+model KanjiStroke {
+  id      String @id @default(cuid())
+  kanjiId String
+  order   Int
+  path    String // SVG path data
+
+  kanji Kanji @relation(fields: [kanjiId], references: [id], onDelete: Cascade)
+
+  @@index([kanjiId])
+  @@map("kanji_strokes")
+}
+
+// ─── Grammar ─────────────────────────────────────────────────────────────────
+
+model Grammar {
+  id              String    @id @default(cuid())
+  pattern         String    // 〜たい
+  meaning         String    // "want to do"
+  jlptLevel       JLPTLevel
+  formation       String    // "verb stem + たい"
+  usage           String?   @db.Text
+  restrictions    String?
+  commonMistakes  String?   @db.Text
+  order           Int       @default(0)
+  tags            String[]  @default([])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  examples         GrammarExample[]
+  relatedGrammar   GrammarRelation[] @relation("GrammarA")
+  relatedTo        GrammarRelation[] @relation("GrammarB")
+  prerequisiteFor  GrammarPrereq[]   @relation("Prerequisite")
+  prerequisites    GrammarPrereq[]   @relation("Requires")
+  userProgress     UserGrammar[]
+
+  @@index([jlptLevel])
+  @@index([pattern])
+  @@map("grammar")
+}
+
+model GrammarExample {
+  id        String  @id @default(cuid())
+  grammarId String
+  japanese  String
+  romaji    String?
+  english   String
+  audioUrl  String?
+  order     Int     @default(0)
+
+  grammar Grammar @relation(fields: [grammarId], references: [id], onDelete: Cascade)
+
+  @@index([grammarId])
+  @@map("grammar_examples")
+}
+
+model GrammarRelation {
+  id         String @id @default(cuid())
+  grammarAId String
+  grammarBId String
+
+  grammarA Grammar @relation("GrammarA", fields: [grammarAId], references: [id], onDelete: Cascade)
+  grammarB Grammar @relation("GrammarB", fields: [grammarBId], references: [id], onDelete: Cascade)
+
+  @@unique([grammarAId, grammarBId])
+  @@map("grammar_relations")
+}
+
+model GrammarPrereq {
+  id             String @id @default(cuid())
+  grammarId      String
+  prerequisiteId String
+
+  grammar      Grammar @relation("Requires", fields: [grammarId], references: [id], onDelete: Cascade)
+  prerequisite Grammar @relation("Prerequisite", fields: [prerequisiteId], references: [id], onDelete: Cascade)
+
+  @@unique([grammarId, prerequisiteId])
+  @@map("grammar_prerequisites")
+}
+
+// ─── Kana ────────────────────────────────────────────────────────────────────
+
+model Kana {
+  id          String   @id @default(cuid())
+  character   String   @unique
+  type        KanaType // HIRAGANA or KATAKANA
+  romaji      String
+  group       String   // a, ka, sa, ta, na, ha, ma, ya, ra, wa, n, combo, dakuten
+  order       Int
+  strokePaths String[] // SVG stroke paths
+  audioUrl    String?
+  exampleWord String?  // さくら
+  exampleMeaning String? // cherry blossom
+
+  @@index([type])
+  @@map("kana")
+}
+
+enum KanaType {
+  HIRAGANA
+  KATAKANA
+}
+
+// ─── Audio ───────────────────────────────────────────────────────────────────
+
+model AudioSource {
+  id           String      @id @default(cuid())
+  vocabularyId String?
+  url          String
+  type         AudioType   // RECORDED or TTS
+  quality      AudioQuality @default(STANDARD)
+  source       String?     // "jmdict-audio", "google-tts", etc.
+  createdAt    DateTime    @default(now())
+
+  vocabulary Vocabulary? @relation(fields: [vocabularyId], references: [id], onDelete: SetNull)
+
+  @@index([vocabularyId])
+  @@map("audio_sources")
+}
+
+enum AudioType {
+  RECORDED
+  TTS
+}
+
+enum AudioQuality {
+  HIGH
+  STANDARD
+  LOW
+}
+
+// ─── User Progress ───────────────────────────────────────────────────────────
+
+model UserVocabulary {
+  id             String    @id @default(cuid())
+  userId         String
+  vocabularyId   String
+  status         LearningStatus @default(NEW)
+  masteryScore   Float     @default(0)
+  correctCount   Int       @default(0)
+  incorrectCount Int       @default(0)
+  easeFactor     Float     @default(2.5)   // SM-2
+  interval       Int       @default(1)     // days
+  streak         Int       @default(0)
+  lastReviewedAt DateTime?
+  nextReviewAt   DateTime?
+  learnedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vocabulary Vocabulary @relation(fields: [vocabularyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, vocabularyId])
+  @@index([userId])
+  @@index([nextReviewAt])
+  @@index([status])
+  @@map("user_vocabulary")
+}
+
+model UserKanji {
+  id             String    @id @default(cuid())
+  userId         String
+  kanjiId        String
+  status         LearningStatus @default(NEW)
+  masteryScore   Float     @default(0)
+  correctCount   Int       @default(0)
+  incorrectCount Int       @default(0)
+  easeFactor     Float     @default(2.5)
+  interval       Int       @default(1)
+  streak         Int       @default(0)
+  lastReviewedAt DateTime?
+  nextReviewAt   DateTime?
+  learnedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kanji Kanji @relation(fields: [kanjiId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kanjiId])
+  @@index([userId])
+  @@index([nextReviewAt])
+  @@map("user_kanji")
+}
+
+model UserGrammar {
+  id             String    @id @default(cuid())
+  userId         String
+  grammarId      String
+  status         LearningStatus @default(NEW)
+  masteryScore   Float     @default(0)
+  correctCount   Int       @default(0)
+  incorrectCount Int       @default(0)
+  lastReviewedAt DateTime?
+  nextReviewAt   DateTime?
+  learnedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grammar Grammar @relation(fields: [grammarId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, grammarId])
+  @@index([userId])
+  @@map("user_grammar")
+}
+
+enum LearningStatus {
+  NEW
+  LEARNING
+  REVIEW
+  KNOWN
+  MASTERED
+}
+
+// ─── Quiz ─────────────────────────────────────────────────────────────────────
+
+model Quiz {
+  id        String     @id @default(cuid())
+  type      QuizType
+  title     String
+  level     JLPTLevel?
+  lessonId  String?
+  createdAt DateTime   @default(now())
+
+  questions QuizQuestion[]
+  attempts  QuizAttempt[]
+
+  @@map("quizzes")
+}
+
+enum QuizType {
+  VOCABULARY
+  KANJI
+  GRAMMAR
+  LISTENING
+  READING
+  MIXED
+}
+
+model QuizQuestion {
+  id               String       @id @default(cuid())
+  quizId           String?
+  type             QuestionType
+  question         String
+  questionJa       String?
+  choices          Json?        // [{id, text, isCorrect}]
+  correctAnswer    String
+  explanation      String?
+  explanationJa    String?
+  vocabularyId     String?
+  kanjiId          String?
+  grammarId        String?
+  level            JLPTLevel?
+  difficulty       Float        @default(0.5)
+  createdAt        DateTime     @default(now())
+
+  quiz     Quiz?         @relation(fields: [quizId], references: [id], onDelete: SetNull)
+  attempts QuizAttempt[]
+
+  @@index([type])
+  @@index([level])
+  @@map("quiz_questions")
+}
+
+enum QuestionType {
+  MULTIPLE_CHOICE
+  FILL_IN_THE_BLANK
+  TYPING
+  TRANSLATION_EN_JA
+  TRANSLATION_JA_EN
+  KANA_RECOGNITION
+  KANJI_RECOGNITION
+  LISTENING
+  READING_COMPREHENSION
+  SENTENCE_ORDER
+}
+
+model QuizAttempt {
+  id           String   @id @default(cuid())
+  userId       String
+  quizId       String?
+  questionId   String?
+  userAnswer   String
+  isCorrect    Boolean
+  timeSpentMs  Int?
+  createdAt    DateTime @default(now())
+
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quiz     Quiz?         @relation(fields: [quizId], references: [id], onDelete: SetNull)
+  question QuizQuestion? @relation(fields: [questionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("quiz_attempts")
+}
+
+// ─── Study Sessions ──────────────────────────────────────────────────────────
+
+model StudySession {
+  id           String    @id @default(cuid())
+  userId       String
+  startedAt    DateTime  @default(now())
+  endedAt      DateTime?
+  durationMs   Int?
+  xpEarned     Int       @default(0)
+  wordsStudied Int       @default(0)
+  activity     String?   // "lesson", "review", "dictionary", "quiz"
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([startedAt])
+  @@map("study_sessions")
+}
+
+model ReviewSchedule {
+  id           String    @id @default(cuid())
+  userId       String
+  itemType     ItemType
+  itemId       String
+  nextReviewAt DateTime
+  priority     Float     @default(0.5)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, nextReviewAt])
+  @@index([itemType, itemId])
+  @@map("review_schedules")
+}
+
+enum ItemType {
+  VOCABULARY
+  KANJI
+  GRAMMAR
+}
+
+// ─── Search History ──────────────────────────────────────────────────────────
+
+model SearchHistory {
+  id          String   @id @default(cuid())
+  userId      String?
+  query       String
+  queryType   String?  // "romaji", "japanese", "english"
+  resultCount Int      @default(0)
+  clickedId   String?
+  clickedType String?
+  createdAt   DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([query])
+  @@index([createdAt])
+  @@map("search_history")
+}
+
+// ─── Recommendations ─────────────────────────────────────────────────────────
+
+model Recommendation {
+  id          String         @id @default(cuid())
+  userId      String
+  type        RecommendType
+  itemId      String
+  itemType    ItemType
+  score       Float
+  reason      String?
+  shown       Boolean        @default(false)
+  clicked     Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  expiresAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("recommendations")
+}
+
+enum RecommendType {
+  NEXT_LESSON
+  LEARN_WORD
+  REVIEW_WORD
+  LEARN_GRAMMAR
+  LEARN_KANJI
+  PRACTICE
+}
+
+// ─── AI Conversations ────────────────────────────────────────────────────────
+
+model AIConversation {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String?
+  context   String?  // "tutor", "analyzer", "exercise"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages AIMessage[]
+
+  @@index([userId])
+  @@map("ai_conversations")
+}
+
+model AIMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  role           String   // "user" or "assistant"
+  content        String   @db.Text
+  metadata       Json?    // structured data from AI response
+  createdAt      DateTime @default(now())
+
+  conversation AIConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@map("ai_messages")
+}

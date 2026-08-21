@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
+import { Pool } from 'pg'
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined
@@ -8,11 +9,9 @@ const globalForPrisma = globalThis as unknown as {
 function createPrismaClient(): PrismaClient {
   const connectionString = process.env.DATABASE_URL
   if (!connectionString) {
-    // During build time, DATABASE_URL may not be set.
-    // Return a proxy that will throw when actually accessed at runtime.
     return new Proxy({} as PrismaClient, {
       get(_, prop) {
-        if (prop === 'then') return undefined // Prevents thenable detection
+        if (prop === 'then') return undefined
         throw new Error(
           `DATABASE_URL environment variable is not set. Cannot access prisma.${String(prop)}.`
         )
@@ -20,7 +19,14 @@ function createPrismaClient(): PrismaClient {
     })
   }
 
-  const adapter = new PrismaPg({ connectionString })
+  const pool = new Pool({
+    connectionString,
+    ssl: connectionString.includes('supabase.co') || connectionString.includes('sslmode=')
+      ? { rejectUnauthorized: false }
+      : undefined,
+  })
+
+  const adapter = new PrismaPg(pool)
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === 'development' ? ['error', 'warn'] : ['error'],

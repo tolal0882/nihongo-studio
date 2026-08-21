@@ -55,7 +55,7 @@ export default function TutorPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.error ?? 'AI tutor unavailable. Check your ANTHROPIC_API_KEY in .env.local.' }])
+        setMessages(prev => [...prev, { role: 'assistant', content: data.error ?? 'AI tutor unavailable. Check your GEMINI_API_KEY in .env.local.' }])
         return
       }
 
@@ -101,7 +101,7 @@ export default function TutorPage() {
       {/* Header */}
       <div>
         <h1 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.25rem' }}>🤖 AI Japanese Tutor</h1>
-        <p style={{ color: 'var(--color-text-2)', fontSize: '0.9rem' }}>Powered by Claude — ask anything, get corrections, or analyze a sentence.</p>
+        <p style={{ color: 'var(--color-text-2)', fontSize: '0.9rem' }}>Powered by Gemini — ask anything, get corrections, or analyze a sentence.</p>
       </div>
 
       {/* Tabs */}

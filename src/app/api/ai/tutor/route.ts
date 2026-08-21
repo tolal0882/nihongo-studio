@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenAI, Type, type Content, type Part, type FunctionDeclaration } from '@google/genai'
 import { prisma } from '@/lib/db/prisma'
 import { z } from 'zod'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+const MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
+const MAX_TOOL_ITERATIONS = 5
 
 const tutorSchema = z.object({
   message: z.string().min(1).max(2000),
@@ -12,51 +14,52 @@ const tutorSchema = z.object({
   context: z.enum(['tutor', 'analyzer', 'exercise']).default('tutor'),
 })
 
-// Tool definitions for Claude
-const tools: Anthropic.Tool[] = [
-  {
-    name: 'search_dictionary',
-    description: 'Search the Nihongo Studio dictionary for a word',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        query: { type: 'string', description: 'The word to search (Japanese, romaji, or English)' },
+// Tool definitions for Gemini function calling
+const functionDeclarations: FunctionDeclaration[] = [
+      {
+        name: 'search_dictionary',
+        description: 'Search the Nihongo Studio dictionary for a word',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            query: { type: Type.STRING, description: 'The word to search (Japanese, romaji, or English)' },
+          },
+          required: ['query'],
+        },
       },
-      required: ['query'],
-    },
-  },
-  {
-    name: 'get_vocabulary',
-    description: 'Get full vocabulary details by ID',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        id: { type: 'string', description: 'Vocabulary ID' },
+      {
+        name: 'get_vocabulary',
+        description: 'Get full vocabulary details by ID',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            id: { type: Type.STRING, description: 'Vocabulary ID' },
+          },
+          required: ['id'],
+        },
       },
-      required: ['id'],
-    },
-  },
-  {
-    name: 'get_grammar',
-    description: 'Get grammar pattern details by ID or pattern',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        pattern: { type: 'string', description: 'Grammar pattern e.g. 〜たい' },
+      {
+        name: 'get_grammar',
+        description: 'Get grammar pattern details by ID or pattern',
+        parameters: {
+          type: Type.OBJECT,
+          properties: {
+            pattern: { type: Type.STRING, description: 'Grammar pattern e.g. 〜たい' },
+          },
+          required: ['pattern'],
+        },
       },
-      required: ['pattern'],
-    },
-  },
   {
     name: 'get_user_level',
-    description: 'Get the current user\'s Japanese level and progress',
-    input_schema: {
-      type: 'object' as const,
+    description: "Get the current user's Japanese level and progress",
+    parameters: {
+      type: Type.OBJECT,
       properties: {},
-      required: [],
     },
   },
 ]
+
+const tools = [{ functionDeclarations }]
 
 // Tool implementations
 async function executeTool(
@@ -107,9 +110,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
-        { error: 'AI tutor not configured. Add ANTHROPIC_API_KEY to your .env.local file.' },
+        { error: 'AI tutor not configured. Add GEMINI_API_KEY to your environment.' },
         { status: 503 }
       )
     }
@@ -171,58 +174,48 @@ When responding, structure your answer as JSON with these fields:
 
 Use tools when you need to look up specific words, grammar, or user data.`
 
-    const messages: Anthropic.MessageParam[] = [
-      ...history.map(h => ({
-        role: h.role as 'user' | 'assistant',
-        content: h.content,
+    const contents: Content[] = [
+      ...history.map((h): Content => ({
+        role: h.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: h.content }],
       })),
-      { role: 'user', content: message },
+      { role: 'user', parts: [{ text: message }] },
     ]
 
     // Agentic loop with tool use
-    let response = await client.messages.create({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 2048,
-      system: systemPrompt,
-      tools,
-      messages,
+    let response = await client.models.generateContent({
+      model: MODEL,
+      contents,
+      config: { systemInstruction: systemPrompt, tools },
     })
 
-    // Handle tool calls
-    while (response.stop_reason === 'tool_use') {
-      const toolUseBlocks = response.content.filter(b => b.type === 'tool_use')
-      const toolResults: Anthropic.ToolResultBlockParam[] = []
+    let iterations = 0
+    while ((response.functionCalls?.length ?? 0) > 0 && iterations < MAX_TOOL_ITERATIONS) {
+      iterations++
+      const functionCalls = response.functionCalls!
 
-      for (const toolUse of toolUseBlocks) {
-        if (toolUse.type !== 'tool_use') continue
-        const result = await executeTool(
-          toolUse.name,
-          toolUse.input as Record<string, string>,
-          userId
-        )
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: toolUse.id,
-          content: result,
+      const modelParts: Part[] = response.candidates?.[0]?.content?.parts ??
+        functionCalls.map(fc => ({ functionCall: fc }))
+      contents.push({ role: 'model', parts: modelParts })
+
+      const responseParts: Part[] = []
+      for (const fc of functionCalls) {
+        if (!fc.name) continue
+        const result = await executeTool(fc.name, (fc.args ?? {}) as Record<string, string>, userId)
+        responseParts.push({
+          functionResponse: { name: fc.name, response: { result } },
         })
       }
+      contents.push({ role: 'user', parts: responseParts })
 
-      messages.push(
-        { role: 'assistant', content: response.content },
-        { role: 'user', content: toolResults }
-      )
-
-      response = await client.messages.create({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 2048,
-        system: systemPrompt,
-        tools,
-        messages,
+      response = await client.models.generateContent({
+        model: MODEL,
+        contents,
+        config: { systemInstruction: systemPrompt, tools },
       })
     }
 
-    const textBlock = response.content.find(b => b.type === 'text')
-    const rawText = textBlock?.type === 'text' ? textBlock.text : ''
+    const rawText = response.text ?? ''
 
     // Try to parse as structured JSON
     let structured: Record<string, unknown> = { answer: rawText }

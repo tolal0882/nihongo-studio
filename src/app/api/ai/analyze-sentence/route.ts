@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenAI } from '@google/genai'
 import { z } from 'zod'
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+const MODEL = process.env.GEMINI_MODEL ?? 'gemini-2.5-flash'
 
 const analyzeSchema = z.object({
   sentence: z.string().min(1).max(500),
@@ -16,9 +17,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    if (!process.env.ANTHROPIC_API_KEY) {
+    if (!process.env.GEMINI_API_KEY) {
       return NextResponse.json(
-        { error: 'AI not configured. Add ANTHROPIC_API_KEY to .env.local' },
+        { error: 'AI not configured. Add GEMINI_API_KEY to your environment.' },
         { status: 503 }
       )
     }
@@ -59,14 +60,12 @@ Return ONLY valid JSON in this exact format:
   "tips": ["tip for improvement at their level"]
 }`
 
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-5',
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: prompt }],
+    const response = await client.models.generateContent({
+      model: MODEL,
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
     })
 
-    const textBlock = response.content.find(b => b.type === 'text')
-    const rawText = textBlock?.type === 'text' ? textBlock.text : '{}'
+    const rawText = response.text ?? '{}'
 
     let analysis: Record<string, unknown> = {}
     try {

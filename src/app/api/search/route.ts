@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const parsed = searchSchema.safeParse({
       q: searchParams.get('q'),
-      limit: searchParams.get('limit'),
+      limit: searchParams.get('limit') ?? undefined,
     })
 
     if (!parsed.success) {

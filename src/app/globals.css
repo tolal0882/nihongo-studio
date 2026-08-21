@@ -412,7 +412,15 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: var(--color-text-3); }
 
 /* ── Responsive ───────────────────────────────────────────────── */
+.show-mobile { display: none !important; }
+.app-main { padding-bottom: 1.5rem; }
+
 @media (max-width: 768px) {
   .text-kanji { font-size: 2rem; }
   .card { padding: 1rem; }
+
+  .hide-mobile { display: none !important; }
+  .show-mobile { display: inline-flex !important; }
+  nav.show-mobile { display: flex !important; }
+  .app-main { padding-bottom: 5rem; }
 }

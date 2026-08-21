@@ -122,10 +122,45 @@ export default function AppShell({ children, user }: AppShellProps) {
         </header>
 
         {/* Content */}
-        <main style={{ flex: 1, padding: '1.5rem', maxWidth: '1100px', width: '100%', margin: '0 auto' }}>
+        <main className="app-main" style={{ flex: 1, padding: '1.5rem', maxWidth: '1100px', width: '100%', margin: '0 auto' }}>
           {children}
         </main>
       </div>
+
+      {/* Mobile menu overlay */}
+      {mobileMenuOpen && (
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          style={{
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 150, display: 'flex',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--color-surface)', width: '80%', maxWidth: '300px', height: '100%',
+              display: 'flex', flexDirection: 'column', padding: '0.75rem', overflowY: 'auto',
+            }}
+          >
+            <div style={{ padding: '0.5rem 0.75rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ width: 36, height: 36, borderRadius: '10px', background: 'linear-gradient(135deg, #818cf8, #6366f1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', color: 'white', fontWeight: 700, fontFamily: 'Noto Sans JP, sans-serif' }}>日</div>
+              <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--color-text)' }}>Nihongo Studio</span>
+            </div>
+            {NAV_ITEMS.map(item => (
+              <Link key={item.href} href={item.href}
+                onClick={() => setMobileMenuOpen(false)}
+                className={`nav-link ${pathname?.startsWith(item.href) ? 'active' : ''}`}
+                style={{ marginBottom: '2px' }}>
+                <span style={{ fontSize: '1rem', width: '22px', textAlign: 'center', fontFamily: 'Noto Sans JP, sans-serif' }}>{item.icon}</span>
+                {item.label}
+              </Link>
+            ))}
+            <button onClick={() => signOut({ callbackUrl: '/' })} className="btn btn-ghost btn-sm" style={{ marginTop: 'auto', justifyContent: 'center', color: 'var(--color-text-3)' }}>
+              Sign out
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Mobile bottom nav */}
       <nav style={{

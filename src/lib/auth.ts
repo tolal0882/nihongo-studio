@@ -46,15 +46,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
       if (user) {
         token.id = user.id
-        const profile = await prisma.profile.findUnique({
-          where: { userId: user.id as string },
-        })
-        token.currentLevel = profile?.currentLevel ?? 'ZERO'
-        token.onboardingComplete = profile?.onboardingComplete ?? false
         token.role = (await prisma.user.findUnique({ where: { id: user.id as string } }))?.role ?? 'LEARNER'
+      }
+
+      if (token.id) {
+        if (!token.onboardingComplete || trigger === 'update') {
+          const profile = await prisma.profile.findUnique({
+            where: { userId: token.id as string },
+          })
+          token.currentLevel = profile?.currentLevel ?? 'ZERO'
+          token.onboardingComplete = profile?.onboardingComplete ?? false
+        }
       }
       return token
     },

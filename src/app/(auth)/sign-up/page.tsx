@@ -29,8 +29,12 @@ export default function SignUpPage() {
         return
       }
       // Auto-sign in after registration
-      await signIn('credentials', { email, password, redirect: false })
-      router.push('/onboarding')
+      const signinRes = await signIn('credentials', { email, password, redirect: false })
+      if (signinRes?.error) {
+        window.location.href = '/sign-in'
+      } else {
+        window.location.href = '/onboarding'
+      }
     } catch {
       setError('Something went wrong. Please try again.')
     } finally {

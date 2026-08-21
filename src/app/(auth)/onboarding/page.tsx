@@ -25,9 +25,9 @@ export default function OnboardingPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentLevel: selected }),
       })
-      router.push('/dashboard')
+      window.location.href = '/dashboard'
     } catch {
-      router.push('/dashboard')
+      window.location.href = '/dashboard'
     } finally {
       setLoading(false)
     }
